@@ -246,7 +246,7 @@ func TestName(t *testing.T) {
 		require.Empty(t, body)
 	})
 
-	t.Run("verifies that all mocked endpoints where called", func(t *testing.T) {
+	t.Run("verifies that all mocked endpoint where called", func(t *testing.T) {
 		mockT := new(testing.T)
 
 		ms := NewMockServer(WithPort(60000))
@@ -278,8 +278,8 @@ func TestName(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		getEndpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent))
-		postEndpoint := ms.Post("/post").Return(StatusCode(http.StatusOK))
+		getEndpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
+		postEndpoint := ms.Post("/post").Return(StatusCode(http.StatusOK)).Endpoint()
 
 		ms.Start(mockT)
 		defer ms.Teardown()

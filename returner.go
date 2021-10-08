@@ -2,14 +2,17 @@ package mockhttp
 
 import "net/http"
 
+// Responder configures a http.ResponseWriter to send data back.
 type Responder func(w http.ResponseWriter)
 
+// StatusCode is a Responder that defines the response status code.
 func StatusCode(code int) Responder {
 	return func(w http.ResponseWriter) {
 		w.WriteHeader(code)
 	}
 }
 
+// Headers is a Responder that defines the response headers.
 func Headers(headers http.Header) Responder {
 	return func(w http.ResponseWriter) {
 		for k, v := range headers {
@@ -20,6 +23,7 @@ func Headers(headers http.Header) Responder {
 	}
 }
 
+// JSONBody is a Responder that defines the response body as a JSON string.
 func JSONBody(jsonStr string) Responder {
 	return func(w http.ResponseWriter) {
 		w.Header().Add("Content-Type", "application/json")
@@ -27,18 +31,25 @@ func JSONBody(jsonStr string) Responder {
 	}
 }
 
+// Returner constructs the endpoint's response with a collection of Responders.
 type Returner struct {
-	expectation string
-	builders    []Responder
+	endpoint string
+	builders []Responder
 }
 
-func newReturner(expectation string) *Returner {
-	return &Returner{expectation: expectation}
+func newReturner(endpoint string) *Returner {
+	return &Returner{endpoint: endpoint}
 }
 
-func (r *Returner) Return(builders ...Responder) string {
+// Return set up a collection of Responders.
+func (r *Returner) Return(builders ...Responder) *Returner {
 	r.builders = builders
-	return r.expectation
+	return r
+}
+
+// Endpoint returns the endpoint name (method + path) that this Returner represents.
+func (r *Returner) Endpoint() string {
+	return r.endpoint
 }
 
 func (r *Returner) write(w http.ResponseWriter) {

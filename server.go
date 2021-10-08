@@ -10,23 +10,27 @@ import (
 	"testing"
 )
 
+// Option represents a MockServer configuration.
 type Option func(ms *MockServer)
 
+// WithPort defines a static TCP port for the MockServer to listen.
 func WithPort(port int) Option {
 	return func(ms *MockServer) {
 		ms.port = port
 	}
 }
 
+// MockServer is an HTTP testing server designed for easy mocking of REST APIs.
 type MockServer struct {
 	T *testing.T
 
-	port         int
-	server       *httptest.Server
-	router       chi.Router
-	expectations sync.Map
+	port      int
+	server    *httptest.Server
+	router    chi.Router
+	endpoints sync.Map
 }
 
+// NewMockServer creates a MockServer with the provided options.
 func NewMockServer(opts ...Option) *MockServer {
 	router := chi.NewRouter()
 	mockServer := &MockServer{router: router}
@@ -37,6 +41,9 @@ func NewMockServer(opts ...Option) *MockServer {
 	return mockServer
 }
 
+// Start initializes the MockServer on a background goroutine.
+//
+// Important: All endpoint mocks MUST be defined before calling this method.
 func (ms *MockServer) Start(t *testing.T) {
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", ms.port))
 	if err != nil {
@@ -62,6 +69,8 @@ func (ms *MockServer) Start(t *testing.T) {
 	server.Start()
 }
 
+// Port returns the TCP port where the MockServer is listening.
+// It can be a statically configured port or a dynamic allocated one.
 func (ms *MockServer) Port() int {
 	if ms.port > 0 {
 		return ms.port
@@ -75,112 +84,124 @@ func (ms *MockServer) Port() int {
 	return addr.Port
 }
 
+// AssertExpectations verifies that every registered endpoint was called at least once.
 func (ms *MockServer) AssertExpectations() {
 	var failedExpectations []string
-	ms.expectations.Range(func(key, value interface{}) bool {
-		expectation := key.(string)
+	ms.endpoints.Range(func(key, value interface{}) bool {
+		endpoint := key.(string)
 		called := value.(bool)
 		if !called {
-			failedExpectations = append(failedExpectations, expectation)
+			failedExpectations = append(failedExpectations, endpoint)
 		}
 
 		return true
 	})
 
-	for _, expectation := range failedExpectations {
-		ms.T.Errorf("expected endpoint was not called: %s", expectation)
+	for _, endpoint := range failedExpectations {
+		ms.T.Errorf("expected endpoint was not called: %s", endpoint)
 	}
 }
 
-func (ms *MockServer) AssertNotCalled(expectation string) {
-	result, found := ms.expectations.Load(expectation)
+// AssertNotCalled verifies that the given endpoint was never called.
+func (ms *MockServer) AssertNotCalled(endpoint string) {
+	result, found := ms.endpoints.Load(endpoint)
 	if !found {
-		ms.T.Errorf("unknwon endpoint expectation: %s", expectation)
+		ms.T.Errorf("unknwon endpoint endpoint: %s", endpoint)
 		return
 	}
 
 	called, _ := result.(bool)
-
 	if called {
-		ms.T.Errorf("endpoint was called when not expected: %s", expectation)
+		ms.T.Errorf("endpoint was called when not expected: %s", endpoint)
 	}
 }
 
+// Get creates a mock endpoint for a get request.
 func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodGet, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodGet, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Get(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Get(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Post creates a mock endpoint for a post request.
 func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodPost, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodPost, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Post(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Post(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Put creates a mock endpoint for a put request.
 func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodPut, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodPut, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Put(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Put(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Patch creates a mock endpoint for a patch request.
 func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodPatch, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodPatch, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Patch(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Patch(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Delete creates a mock endpoint for a delete request.
 func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodDelete, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodDelete, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Delete(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Delete(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Head creates a mock endpoint for a head request.
 func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Returner {
-	expectation := expectationName(http.MethodHead, pattern)
-	ms.expectations.Store(expectation, false)
+	endpoint := endpointName(http.MethodHead, pattern)
+	ms.endpoints.Store(endpoint, false)
 
-	returner := newReturner(expectation)
-	ms.router.Head(pattern, ms.newHandler(expectation, returner, matchers))
+	returner := newReturner(endpoint)
+	ms.router.Head(pattern, ms.newHandler(endpoint, returner, matchers))
 
 	return returner
 }
 
+// Router exposes the internal chi.Router to allow configurations not supported by the helper methods.
 func (ms *MockServer) Router() chi.Router {
 	return ms.router
 }
 
+// Server exposes the internal testing HTTP server.
 func (ms *MockServer) Server() *httptest.Server {
 	return ms.server
 }
 
+// Teardown stops the HTTP server.
+//
+// Call this with a defer after starting the server.
 func (ms *MockServer) Teardown() {
 	ms.server.Close()
 }
 
-func (ms *MockServer) newHandler(expectation string, returner *Returner, matchers []Matcher) http.HandlerFunc {
+func (ms *MockServer) newHandler(endpoint string, returner *Returner, matchers []Matcher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ms.expectations.Store(expectation, true)
+		ms.endpoints.Store(endpoint, true)
 
 		for _, m := range matchers {
 			m(ms.T, r)
@@ -190,6 +211,6 @@ func (ms *MockServer) newHandler(expectation string, returner *Returner, matcher
 	}
 }
 
-func expectationName(m, p string) string {
+func endpointName(m, p string) string {
 	return m + " " + p
 }
