@@ -28,11 +28,17 @@ func JSONBody(jsonStr string) Responder {
 }
 
 type Returner struct {
-	builders []Responder
+	expectation string
+	builders    []Responder
 }
 
-func (r *Returner) Return(builders ...Responder) {
+func newReturner(expectation string) *Returner {
+	return &Returner{expectation: expectation}
+}
+
+func (r *Returner) Return(builders ...Responder) string {
 	r.builders = builders
+	return r.expectation
 }
 
 func (r *Returner) write(w http.ResponseWriter) {

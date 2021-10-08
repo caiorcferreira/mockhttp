@@ -92,11 +92,25 @@ func (ms *MockServer) AssertExpectations() {
 	}
 }
 
+func (ms *MockServer) AssertNotCalled(expectation string) {
+	result, found := ms.expectations.Load(expectation)
+	if !found {
+		ms.T.Errorf("unknwon endpoint expectation: %s", expectation)
+		return
+	}
+
+	called, _ := result.(bool)
+
+	if called {
+		ms.T.Errorf("endpoint was called when not expected: %s", expectation)
+	}
+}
+
 func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodGet, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Get(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
@@ -106,7 +120,7 @@ func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodPost, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Post(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
@@ -116,7 +130,7 @@ func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodPut, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Put(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
@@ -126,7 +140,7 @@ func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodPatch, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Patch(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
@@ -136,7 +150,7 @@ func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodDelete, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Delete(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
@@ -146,7 +160,7 @@ func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Returner {
 	expectation := expectationName(http.MethodHead, pattern)
 	ms.expectations.Store(expectation, false)
 
-	returner := &Returner{}
+	returner := newReturner(expectation)
 	ms.router.Head(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner

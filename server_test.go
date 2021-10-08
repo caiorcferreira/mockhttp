@@ -220,6 +220,8 @@ func TestName(t *testing.T) {
 		require.Equal(t, http.StatusCreated, response.StatusCode)
 	})
 
+	//todo: test no return setup
+
 	t.Run("verifies that all mocked endpoints where called", func(t *testing.T) {
 		mockT := new(testing.T)
 
@@ -244,6 +246,36 @@ func TestName(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, response.StatusCode)
 
 		ms.AssertExpectations()
+		require.True(t, mockT.Failed())
+	})
+
+	t.Run("verifies that an endpoint was not called", func(t *testing.T) {
+		mockT := new(testing.T)
+
+		ms := NewMockServer(WithPort(60000))
+
+		getEndpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+		postEndpoint := ms.Post("/post").Return(StatusCode(http.StatusOK))
+
+		ms.Start(mockT)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Get("http://localhost:60000/get")
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusNoContent, response.StatusCode)
+
+		ms.AssertNotCalled(postEndpoint)
+		require.False(t, mockT.Failed())
+
+		ms.AssertNotCalled(getEndpoint)
 		require.True(t, mockT.Failed())
 	})
 }
