@@ -37,7 +37,7 @@ func TestName(t *testing.T) {
 		}, 2*time.Second, 200*time.Millisecond)
 	})
 
-	t.Run("fail if not mapped route is called", func(t *testing.T) {
+	t.Run("fail if unmapped route is called", func(t *testing.T) {
 		mockT := new(testing.T)
 
 		ms := NewMockServer(WithPort(60000))
@@ -218,5 +218,32 @@ func TestName(t *testing.T) {
 		}, 2*time.Second, 200*time.Millisecond)
 
 		require.Equal(t, http.StatusCreated, response.StatusCode)
+	})
+
+	t.Run("verifies that all mocked endpoints where called", func(t *testing.T) {
+		mockT := new(testing.T)
+
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+		ms.Post("/post").Return(StatusCode(http.StatusOK))
+
+		ms.Start(mockT)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Get("http://localhost:60000/get")
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusNoContent, response.StatusCode)
+
+		ms.AssertExpectations()
+		require.True(t, mockT.Failed())
 	})
 }

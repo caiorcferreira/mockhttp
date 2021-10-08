@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 )
 
@@ -18,10 +19,12 @@ func WithPort(port int) Option {
 }
 
 type MockServer struct {
-	port   int
-	server *httptest.Server
-	router chi.Router
-	T      *testing.T
+	T *testing.T
+
+	port         int
+	server       *httptest.Server
+	router       chi.Router
+	expectations sync.Map
 }
 
 func NewMockServer(opts ...Option) *MockServer {
@@ -44,10 +47,6 @@ func (ms *MockServer) Start(t *testing.T) {
 	server := httptest.NewUnstartedServer(ms.router)
 	server.Listener = l
 
-	ms.server = server
-
-	ms.T = t
-
 	ms.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
@@ -56,6 +55,9 @@ func (ms *MockServer) Start(t *testing.T) {
 		t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
+
+	ms.server = server
+	ms.T = t
 
 	server.Start()
 }
@@ -73,46 +75,81 @@ func (ms *MockServer) Port() int {
 	return addr.Port
 }
 
-func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
-	returner := &Returner{}
-	ms.router.Get(pattern, func(w http.ResponseWriter, r *http.Request) {
-		for _, m := range matchers {
-			m(ms.T, r)
+func (ms *MockServer) AssertExpectations() {
+	var failedExpectations []string
+	ms.expectations.Range(func(key, value interface{}) bool {
+		expectation := key.(string)
+		called := value.(bool)
+		if !called {
+			failedExpectations = append(failedExpectations, expectation)
 		}
 
-		returner.write(w)
+		return true
 	})
+
+	for _, expectation := range failedExpectations {
+		ms.T.Errorf("expected endpoint was not called: %s", expectation)
+	}
+}
+
+func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
+	expectation := expectationName(http.MethodGet, pattern)
+	ms.expectations.Store(expectation, false)
+
+	returner := &Returner{}
+	ms.router.Get(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
 }
 
 func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Returner {
-	returner := &Returner{}
-	ms.router.Post(pattern, func(w http.ResponseWriter, r *http.Request) {
-		for _, m := range matchers {
-			m(ms.T, r)
-		}
+	expectation := expectationName(http.MethodPost, pattern)
+	ms.expectations.Store(expectation, false)
 
-		returner.write(w)
-	})
+	returner := &Returner{}
+	ms.router.Post(pattern, ms.newHandler(expectation, returner, matchers))
 
 	return returner
 }
 
-func (ms *MockServer) Put(pattern string, f http.HandlerFunc) {
-	ms.router.Put(pattern, f)
+func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Returner {
+	expectation := expectationName(http.MethodPut, pattern)
+	ms.expectations.Store(expectation, false)
+
+	returner := &Returner{}
+	ms.router.Put(pattern, ms.newHandler(expectation, returner, matchers))
+
+	return returner
 }
 
-func (ms *MockServer) Patch(pattern string, f http.HandlerFunc) {
-	ms.router.Patch(pattern, f)
+func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Returner {
+	expectation := expectationName(http.MethodPatch, pattern)
+	ms.expectations.Store(expectation, false)
+
+	returner := &Returner{}
+	ms.router.Patch(pattern, ms.newHandler(expectation, returner, matchers))
+
+	return returner
 }
 
-func (ms *MockServer) Delete(pattern string, f http.HandlerFunc) {
-	ms.router.Delete(pattern, f)
+func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Returner {
+	expectation := expectationName(http.MethodDelete, pattern)
+	ms.expectations.Store(expectation, false)
+
+	returner := &Returner{}
+	ms.router.Delete(pattern, ms.newHandler(expectation, returner, matchers))
+
+	return returner
 }
 
-func (ms *MockServer) Head(pattern string, f http.HandlerFunc) {
-	ms.router.Head(pattern, f)
+func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Returner {
+	expectation := expectationName(http.MethodHead, pattern)
+	ms.expectations.Store(expectation, false)
+
+	returner := &Returner{}
+	ms.router.Head(pattern, ms.newHandler(expectation, returner, matchers))
+
+	return returner
 }
 
 func (ms *MockServer) Router() chi.Router {
@@ -125,4 +162,20 @@ func (ms *MockServer) Server() *httptest.Server {
 
 func (ms *MockServer) Teardown() {
 	ms.server.Close()
+}
+
+func (ms *MockServer) newHandler(expectation string, returner *Returner, matchers []Matcher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ms.expectations.Store(expectation, true)
+
+		for _, m := range matchers {
+			m(ms.T, r)
+		}
+
+		returner.write(w)
+	}
+}
+
+func expectationName(m, p string) string {
+	return m + " " + p
 }
