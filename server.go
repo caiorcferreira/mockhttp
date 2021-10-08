@@ -3,11 +3,9 @@ package mockhttp
 import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
 
@@ -127,13 +125,4 @@ func (ms *MockServer) Server() *httptest.Server {
 
 func (ms *MockServer) Teardown() {
 	ms.server.Close()
-}
-
-type Matcher func(t *testing.T, r *http.Request)
-
-func MatchQueryParams(qp url.Values) Matcher {
-	return func(t *testing.T, r *http.Request) {
-		t.Helper()
-		assert.Equal(t, qp, r.URL.Query())
-	}
 }

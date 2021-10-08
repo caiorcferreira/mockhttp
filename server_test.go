@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -131,7 +132,7 @@ func TestName(t *testing.T) {
 		}
 	})
 
-	t.Run("mock request with request matcher", func(t *testing.T) {
+	t.Run("mock request with query param matcher", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 
 		ms.Get(
@@ -155,5 +156,67 @@ func TestName(t *testing.T) {
 		}, 2*time.Second, 200*time.Millisecond)
 
 		require.Equal(t, http.StatusNoContent, response.StatusCode)
+	})
+
+	t.Run("mock request with header matcher", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Get(
+			"/get",
+			MatchHeader(http.Header{"X-App": []string{"foo"}}),
+		).Return(
+			StatusCode(http.StatusNoContent),
+		)
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		request, err := http.NewRequest(http.MethodGet, "http://localhost:60000/get", nil)
+		require.NoError(t, err)
+
+		request.Header.Set("X-App", "foo")
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.DefaultClient.Do(request)
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusNoContent, response.StatusCode)
+	})
+
+	t.Run("mock request with json body matcher", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		jsonBody := `{"result": true}`
+		ms.Post(
+			"/post",
+			MatchJSONBody(jsonBody),
+		).Return(
+			StatusCode(http.StatusCreated),
+		)
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		bodyReader := strings.NewReader(jsonBody)
+		request, err := http.NewRequest(http.MethodPost, "http://localhost:60000/post", bodyReader)
+		require.NoError(t, err)
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.DefaultClient.Do(request)
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusCreated, response.StatusCode)
 	})
 }
