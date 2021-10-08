@@ -81,6 +81,11 @@ func (m *memoryResponseWriter) flush(w http.ResponseWriter) {
 		}
 	}
 
-	w.WriteHeader(m.statusCode)
-	w.Write(m.body)
+	if m.statusCode > 0 {
+		w.WriteHeader(m.statusCode)
+	}
+
+	if len(m.body) > 0 {
+		w.Write(m.body)
+	}
 }
