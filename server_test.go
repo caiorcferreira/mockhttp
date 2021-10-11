@@ -132,6 +132,35 @@ func TestName(t *testing.T) {
 		}
 	})
 
+	t.Run("mock request with json file return builder", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Get("/get").Return(
+			StatusCode(http.StatusOK),
+			JSONFileBody(t, "./fixtures/body.json"),
+		)
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Get("http://localhost:60000/get")
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusOK, response.StatusCode)
+
+		body, err := io.ReadAll(response.Body)
+		require.NoError(t, err)
+
+		require.JSONEq(t, `{"result": true}`, string(body))
+	})
+
 	t.Run("mock request with query param matcher", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 

@@ -1,6 +1,10 @@
 package mockhttp
 
-import "net/http"
+import (
+	"net/http"
+	"os"
+	"testing"
+)
 
 // Responder configures a http.ResponseWriter to send data back.
 type Responder func(w http.ResponseWriter)
@@ -30,6 +34,22 @@ func JSONBody(jsonStr string) Responder {
 		w.Write([]byte(jsonStr))
 	}
 }
+
+// JSONFileBody is a Responder that defines the response body as a JSON file.
+func JSONFileBody(t *testing.T, filePath string) Responder {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read json file: %s", err.Error())
+		return noop
+	}
+
+	return func(w http.ResponseWriter) {
+		w.Header().Add("Content-Type", "application/json")
+		w.Write(content)
+	}
+}
+
+func noop(w http.ResponseWriter) {}
 
 // Returner constructs the endpoint's response with a collection of Responders.
 type Returner struct {
