@@ -36,7 +36,7 @@ func TestMockServer(t *testing.T) {
 			return err == nil
 		}, 2*time.Second, 200*time.Millisecond)
 
-		require.Equal(t, "http://localhost:60000",  ms.URL())
+		require.Equal(t, "http://localhost:60000", ms.URL())
 	})
 
 	t.Run("start mock server at any port available", func(t *testing.T) {
@@ -343,6 +343,57 @@ func TestMockServer(t *testing.T) {
 		require.False(t, mockT.Failed())
 
 		ms.AssertNotCalled(getEndpoint)
+		require.True(t, mockT.Failed())
+	})
+
+	t.Run("get number of times mocked endpoint was called", func(t *testing.T) {
+		mockT := new(testing.T)
+
+		ms := NewMockServer(WithPort(60000))
+
+		endpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
+
+		ms.Start(mockT)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Get("http://localhost:60000/get")
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusNoContent, response.StatusCode)
+
+		require.Equal(t, 1, ms.TimesCalled(endpoint))
+	})
+
+	t.Run("verfies number of times mocked endpoint was called", func(t *testing.T) {
+		mockT := new(testing.T)
+
+		ms := NewMockServer(WithPort(60000))
+
+		endpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
+
+		ms.Start(mockT)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Get("http://localhost:60000/get")
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusNoContent, response.StatusCode)
+
+		ms.AssertTimesCalled(endpoint, 2)
 		require.True(t, mockT.Failed())
 	})
 }

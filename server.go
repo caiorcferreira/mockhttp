@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -71,7 +72,7 @@ func (ms *MockServer) Start(t *testing.T) {
 
 // URL returns the HTTP URL where the MockServer is responds.
 func (ms *MockServer) URL() string {
-	return fmt.Sprintf("http://localhost:%d", ms.Port())	
+	return fmt.Sprintf("http://localhost:%d", ms.Port())
 }
 
 // Port returns the TCP port where the MockServer is listening.
@@ -94,8 +95,8 @@ func (ms *MockServer) AssertExpectations() {
 	var failedExpectations []string
 	ms.endpoints.Range(func(key, value interface{}) bool {
 		endpoint := key.(string)
-		called := value.(bool)
-		if !called {
+		callCounter := value.(*int32)
+		if atomic.LoadInt32(callCounter) == 0 {
 			failedExpectations = append(failedExpectations, endpoint)
 		}
 
@@ -115,16 +116,35 @@ func (ms *MockServer) AssertNotCalled(endpoint string) {
 		return
 	}
 
-	called, _ := result.(bool)
-	if called {
+	callCounter := result.(*int32)
+	if atomic.LoadInt32(callCounter) > 0 {
 		ms.T.Errorf("endpoint was called when not expected: %s", endpoint)
 	}
+}
+
+// AssertTimesCalled verifies how many requests where made to the endpoint.
+func (ms *MockServer) AssertTimesCalled(endpoint string, expected int) {
+	actual := ms.TimesCalled(endpoint)
+	if actual != expected {
+		ms.T.Errorf("endpoint was called %d when expected was %d: %s", actual, expected, endpoint)
+		return
+	}
+}
+
+// TimesCalled returns how many requests where made to the endpoint.
+func (ms *MockServer) TimesCalled(endpoint string) int {
+	result, found := ms.endpoints.Load(endpoint)
+	if !found {
+		return 0
+	}
+
+	callCounter := result.(*int32)
+	return int(atomic.LoadInt32(callCounter))
 }
 
 // Get creates a mock endpoint for a get request.
 func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodGet, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Get(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -135,7 +155,6 @@ func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Returner {
 // Post creates a mock endpoint for a post request.
 func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodPost, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Post(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -146,7 +165,6 @@ func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Returner {
 // Put creates a mock endpoint for a put request.
 func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodPut, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Put(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -157,7 +175,6 @@ func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Returner {
 // Patch creates a mock endpoint for a patch request.
 func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodPatch, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Patch(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -168,7 +185,6 @@ func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Returner {
 // Delete creates a mock endpoint for a delete request.
 func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodDelete, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Delete(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -179,7 +195,6 @@ func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Returner {
 // Head creates a mock endpoint for a head request.
 func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Returner {
 	endpoint := endpointName(http.MethodHead, pattern)
-	ms.endpoints.Store(endpoint, false)
 
 	returner := newReturner(endpoint)
 	ms.router.Head(pattern, ms.newHandler(endpoint, returner, matchers))
@@ -205,8 +220,11 @@ func (ms *MockServer) Teardown() {
 }
 
 func (ms *MockServer) newHandler(endpoint string, returner *Returner, matchers []Matcher) http.HandlerFunc {
+	var counter int32 = 0
+	ms.endpoints.Store(endpoint, &counter)
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		ms.endpoints.Store(endpoint, true)
+		atomic.AddInt32(&counter, 1)
 
 		for _, m := range matchers {
 			m(ms.T, r)
