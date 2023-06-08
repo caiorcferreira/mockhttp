@@ -2,7 +2,6 @@ package mockhttp
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMockServer(t *testing.T) {

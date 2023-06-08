@@ -2,13 +2,14 @@ package mockhttp
 
 import (
 	"fmt"
-	"github.com/go-chi/chi/v5"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // Option represents a MockServer configuration.
