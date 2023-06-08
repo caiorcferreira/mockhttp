@@ -83,7 +83,7 @@ func (ms *MockServer) Start(t *testing.T) {
 
 // URL returns the HTTP URL where the MockServer is responds.
 func (ms *MockServer) URL() string {
-	return ms.server.URL
+	return fmt.Sprintf("http://127.0.0.1:%d", ms.port)
 }
 
 // Port returns the TCP port where the MockServer is listening.
