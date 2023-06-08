@@ -45,6 +45,9 @@ func NewMockServer(opts ...Option) *MockServer {
 
 // Start initializes the MockServer on a background goroutine.
 //
+// It also sets up a cleanup method that asserts the register assertions
+// and teardown the HTTP server.
+//
 // Important: All endpoint mocks MUST be defined before calling this method.
 func (ms *MockServer) Start(t *testing.T) {
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", ms.port))
@@ -69,6 +72,11 @@ func (ms *MockServer) Start(t *testing.T) {
 	ms.T = t
 
 	server.Start()
+
+	t.Cleanup(func() {
+		ms.AssertExpectations()
+		ms.Teardown()
+	})
 }
 
 // URL returns the HTTP URL where the MockServer is responds.

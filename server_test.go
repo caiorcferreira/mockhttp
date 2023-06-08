@@ -398,3 +398,26 @@ func TestMockServer(t *testing.T) {
 		require.True(t, mockT.Failed())
 	})
 }
+
+// This uses the built-in cleanup to perform
+// a integration test similar to what the lib user
+// should write.
+func TestMockServer_Cleanup(t *testing.T) {
+	ms := NewMockServer()
+
+	ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+
+	ms.Start(t)
+
+	var response *http.Response
+	require.Eventually(t, func() bool {
+		r, err := http.Get(ms.URL() + "/get")
+		if err != nil {
+			return false
+		}
+		response = r
+		return true
+	}, 2*time.Second, 200*time.Millisecond)
+
+	require.Equal(t, http.StatusNoContent, response.StatusCode)
+}
