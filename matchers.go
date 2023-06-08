@@ -1,11 +1,12 @@
 package mockhttp
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type Matcher func(t *testing.T, r *http.Request)
