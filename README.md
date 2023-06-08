@@ -36,7 +36,7 @@ func TestCreateBook(t *testing.T) {
 	defer mockServer.Teardown()
 
 	bookBody := strings.NewReader(`{"title": "Foundation"}`)
-	response, err := http.Post("http://localhost:9000/book", "application/json", bookBody)
+	response, err := http.Post("http://localhost:12000/book", "application/json", bookBody)
 	if err != nil {
 		t.Error(err.Error())
 		return
