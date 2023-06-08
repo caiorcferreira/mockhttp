@@ -37,7 +37,7 @@ func TestMockServer(t *testing.T) {
 			return err == nil
 		}, 2*time.Second, 200*time.Millisecond)
 
-		require.Equal(t, "http://localhost:60000", ms.URL())
+		require.Equal(t, "http://127.0.0.1:60000", ms.URL())
 	})
 
 	t.Run("start mock server at any port available", func(t *testing.T) {
