@@ -9,15 +9,15 @@ import (
 // Responder configures a http.ResponseWriter to send data back.
 type Responder func(w http.ResponseWriter)
 
-// StatusCode is a Responder that defines the response status code.
-func StatusCode(code int) Responder {
+// ResponseStatusCode is a Responder that defines the response status code.
+func ResponseStatusCode(code int) Responder {
 	return func(w http.ResponseWriter) {
 		w.WriteHeader(code)
 	}
 }
 
-// Headers is a Responder that defines the response headers.
-func Headers(headers http.Header) Responder {
+// ResponseHeaders is a Responder that defines the response headers.
+func ResponseHeaders(headers http.Header) Responder {
 	return func(w http.ResponseWriter) {
 		for k, v := range headers {
 			for _, i := range v {
@@ -27,16 +27,16 @@ func Headers(headers http.Header) Responder {
 	}
 }
 
-// JSONBody is a Responder that defines the response body as a JSON string.
-func JSONBody(jsonStr string) Responder {
+// JSONResponseBody is a Responder that defines the response body as a JSON string.
+func JSONResponseBody(jsonStr string) Responder {
 	return func(w http.ResponseWriter) {
 		w.Header().Add("Content-Type", "application/json")
 		w.Write([]byte(jsonStr))
 	}
 }
 
-// JSONFileBody is a Responder that defines the response body as a JSON file.
-func JSONFileBody(t *testing.T, filePath string) Responder {
+// JSONFileResponseBody is a Responder that defines the response body as a JSON file.
+func JSONFileResponseBody(t *testing.T, filePath string) Responder {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read json file: %s", err.Error())
@@ -46,6 +46,12 @@ func JSONFileBody(t *testing.T, filePath string) Responder {
 	return func(w http.ResponseWriter) {
 		w.Header().Add("Content-Type", "application/json")
 		w.Write(content)
+	}
+}
+
+func StringResponseBody(b string) Responder {
+	return func(w http.ResponseWriter) {
+		w.Write([]byte(b))
 	}
 }
 
@@ -61,8 +67,8 @@ func newReturner(endpoint string) *Returner {
 	return &Returner{endpoint: endpoint}
 }
 
-// Return set up a collection of Responders.
-func (r *Returner) Return(builders ...Responder) *Returner {
+// Response set up a collection of Responders.
+func (r *Returner) Response(builders ...Responder) *Returner {
 	r.builders = builders
 	return r
 }
@@ -82,6 +88,11 @@ func (r *Returner) write(w http.ResponseWriter) {
 	mw.flush(w)
 }
 
+// memoryResponseWriter accumulates all response builders
+// mutations such that the order they are used in test does not matter.
+//
+// This is necessary because if ResponseStatusCode is used after JSONResponseBody, the
+// status will be fixed at 200 by the Write call to http.ResponseWriter.
 type memoryResponseWriter struct {
 	headers    http.Header
 	body       []byte

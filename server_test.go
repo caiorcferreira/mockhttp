@@ -57,7 +57,7 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+		ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent))
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -70,7 +70,7 @@ func TestMockServer(t *testing.T) {
 	t.Run("mock request with return builder", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 
-		ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+		ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent))
 
 		ms.Start(t)
 		defer ms.Teardown()
@@ -91,9 +91,9 @@ func TestMockServer(t *testing.T) {
 	t.Run("mock request with body and status return builder in wrong order", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 
-		ms.Post("/post").Return(
-			JSONBody(`{"result": true}`),
-			StatusCode(http.StatusCreated),
+		ms.Post("/post").Response(
+			JSONResponseBody(`{"result": true}`),
+			ResponseStatusCode(http.StatusCreated),
 		)
 
 		ms.Start(t)
@@ -123,9 +123,9 @@ func TestMockServer(t *testing.T) {
 		headers := http.Header{
 			"X-Foo": []string{"bar"},
 		}
-		ms.Get("/get").Return(
-			StatusCode(http.StatusNoContent),
-			Headers(headers),
+		ms.Get("/get").Response(
+			ResponseStatusCode(http.StatusNoContent),
+			ResponseHeaders(headers),
 		)
 
 		ms.Start(t)
@@ -150,9 +150,9 @@ func TestMockServer(t *testing.T) {
 	t.Run("mock request with json file return builder", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 
-		ms.Get("/get").Return(
-			StatusCode(http.StatusOK),
-			JSONFileBody(t, "./fixtures/body.json"),
+		ms.Get("/get").Response(
+			ResponseStatusCode(http.StatusOK),
+			JSONFileResponseBody(t, "./fixtures/body.json"),
 		)
 
 		ms.Start(t)
@@ -176,14 +176,42 @@ func TestMockServer(t *testing.T) {
 		require.JSONEq(t, `{"result": true}`, string(body))
 	})
 
+	t.Run("mock request with string response body", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Post("/post").Response(
+			StringResponseBody(`success`),
+		)
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		var response *http.Response
+		require.Eventually(t, func() bool {
+			r, err := http.Post("http://localhost:60000/post", "text/html", nil)
+			if err != nil {
+				return false
+			}
+			response = r
+			return true
+		}, 2*time.Second, 200*time.Millisecond)
+
+		require.Equal(t, http.StatusOK, response.StatusCode)
+
+		body, err := io.ReadAll(response.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, `success`, string(body))
+	})
+
 	t.Run("mock request with query param matcher", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
 
 		ms.Get(
 			"/get",
 			MatchQueryParams(url.Values{"foo": []string{"bar"}}),
-		).Return(
-			StatusCode(http.StatusNoContent),
+		).Response(
+			ResponseStatusCode(http.StatusNoContent),
 		)
 
 		ms.Start(t)
@@ -208,8 +236,8 @@ func TestMockServer(t *testing.T) {
 		ms.Get(
 			"/get",
 			MatchHeader(http.Header{"X-App": []string{"foo"}}),
-		).Return(
-			StatusCode(http.StatusNoContent),
+		).Response(
+			ResponseStatusCode(http.StatusNoContent),
 		)
 
 		ms.Start(t)
@@ -240,8 +268,8 @@ func TestMockServer(t *testing.T) {
 		ms.Post(
 			"/post",
 			MatchJSONBody(jsonBody),
-		).Return(
-			StatusCode(http.StatusCreated),
+		).Response(
+			ResponseStatusCode(http.StatusCreated),
 		)
 
 		ms.Start(t)
@@ -295,8 +323,8 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		ms.Get("/get").Return(StatusCode(http.StatusNoContent))
-		ms.Post("/post").Return(StatusCode(http.StatusOK))
+		ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent))
+		ms.Post("/post").Response(ResponseStatusCode(http.StatusOK))
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -322,8 +350,8 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		getEndpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
-		postEndpoint := ms.Post("/post").Return(StatusCode(http.StatusOK)).Endpoint()
+		getEndpoint := ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent)).Endpoint()
+		postEndpoint := ms.Post("/post").Response(ResponseStatusCode(http.StatusOK)).Endpoint()
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -352,7 +380,7 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		endpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
+		endpoint := ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent)).Endpoint()
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -377,7 +405,7 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		endpoint := ms.Get("/get").Return(StatusCode(http.StatusNoContent)).Endpoint()
+		endpoint := ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent)).Endpoint()
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -405,7 +433,7 @@ func TestMockServer(t *testing.T) {
 func TestMockServer_Cleanup(t *testing.T) {
 	ms := NewMockServer()
 
-	ms.Get("/get").Return(StatusCode(http.StatusNoContent))
+	ms.Get("/get").Response(ResponseStatusCode(http.StatusNoContent))
 
 	ms.Start(t)
 
