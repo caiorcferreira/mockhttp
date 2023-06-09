@@ -1,6 +1,7 @@
 # mockhttp
 [![Go Reference](https://pkg.go.dev/badge/github.com/caiorcferreira/mockhttp.svg)](https://pkg.go.dev/github.com/caiorcferreira/mockhttp)
 [![Go Report Card](https://goreportcard.com/badge/github.com/caiorcferreira/mockhttp)](https://goreportcard.com/report/github.com/caiorcferreira/mockhttp)
+[![Builds](https://github.com/caiorcferreira/mockhttp/actions/workflows/main.yaml/badge.svg)](https://github.com/caiorcferreira/mockhttp/actions/workflows/main.yaml)
 
 A simple and expressive HTTP server mocking library for end-to-end and integration tests in Go.
 
