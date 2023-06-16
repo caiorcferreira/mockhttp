@@ -5,8 +5,6 @@ import (
     "net"
     "net/http"
     "net/http/httptest"
-    "sync"
-    "sync/atomic"
     "testing"
 
     "github.com/go-chi/chi/v5"
@@ -26,17 +24,15 @@ func WithPort(port int) Option {
 type MockServer struct {
     T *testing.T
 
-    port            int
-    server          *httptest.Server
-    router          chi.Router
-    requestCounting sync.Map
-    endpoints       map[string]*Endpoint
+    port      int
+    server    *httptest.Server
+    router    chi.Router
+    endpoints map[string]*Endpoint
 }
 
 // NewMockServer creates a MockServer with the provided options.
 func NewMockServer(opts ...Option) *MockServer {
-    router := chi.NewRouter()
-    mockServer := &MockServer{router: router, endpoints: make(map[string]*Endpoint)}
+    mockServer := &MockServer{endpoints: make(map[string]*Endpoint)}
     for _, o := range opts {
         o(mockServer)
     }
@@ -51,24 +47,45 @@ func NewMockServer(opts ...Option) *MockServer {
 //
 // Important: All name mocks MUST be defined before calling this method.
 func (ms *MockServer) Start(t *testing.T) {
+    t.Helper()
+
     l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", ms.port))
     if err != nil {
         t.Fatal(err.Error())
         return
     }
 
-    server := httptest.NewUnstartedServer(ms.router)
+    router := chi.NewRouter()
+
+    routingFuncs := map[string]routingFunc{
+        http.MethodGet:     router.Get,
+        http.MethodPost:    router.Post,
+        http.MethodPut:     router.Put,
+        http.MethodPatch:   router.Patch,
+        http.MethodDelete:  router.Delete,
+        http.MethodHead:    router.Head,
+        http.MethodOptions: router.Options,
+    }
+
+    for _, endpoint := range ms.endpoints {
+        routing := routingFuncs[endpoint.method]
+
+        routing(endpoint.path, endpoint.Handler(t))
+    }
+
+    server := httptest.NewUnstartedServer(router)
     server.Listener = l
 
-    ms.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+    router.NotFound(func(w http.ResponseWriter, r *http.Request) {
         t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
         w.WriteHeader(http.StatusNotFound)
     })
-    ms.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+    router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
         t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
         w.WriteHeader(http.StatusMethodNotAllowed)
     })
 
+    ms.router = router
     ms.server = server
     ms.T = t
 
@@ -102,90 +119,73 @@ func (ms *MockServer) Port() int {
 
 // AssertExpectations verifies that every registered name was called at least once.
 func (ms *MockServer) AssertExpectations() {
-    ms.requestCounting.Range(func(key, value interface{}) bool {
-        em := key.(string)
-        reqCounter := value.(*int32)
+    for _, endpoint := range ms.endpoints {
+        for _, scenario := range endpoint.scenarios {
+            if int(scenario.executionCount) == scenario.times {
+                break
+            }
 
-        endpoint := ms.endpoints[em]
-        requests := atomic.LoadInt32(reqCounter)
+            if scenario.executionCount == 0 {
+                ms.T.Errorf("endpoint %s was not called", endpoint.Name())
 
-        if requests == int32(endpoint.times) {
-            return true
+                break
+            }
+
+            ms.T.Errorf("endpoint %s was called %d times, expected was %d", endpoint.Name(), scenario.executionCount, scenario.times)
         }
-
-        if requests == 0 {
-            ms.T.Errorf("endpoint %s was not called", endpoint.name)
-
-            return true
-        }
-
-        ms.T.Errorf("endpoint %s was called %d times, expected was %d", endpoint.name, requests, endpoint.times)
-
-        return true
-    })
-}
-
-// TimesCalled returns how many requests where made to the name.
-func (ms *MockServer) TimesCalled(endpoint string) int {
-    result, found := ms.requestCounting.Load(endpoint)
-    if !found {
-        return 0
     }
-
-    callCounter := result.(*int32)
-    return int(atomic.LoadInt32(callCounter))
 }
 
 // Get creates a mock name for a get request.
-func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodGet, pattern, ms.router.Get, matchers...)
+func (ms *MockServer) Get(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodGet, pattern, matchers...)
 }
 
 // Post creates a mock name for a post request.
-func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodPost, pattern, ms.router.Post, matchers...)
+func (ms *MockServer) Post(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodPost, pattern, matchers...)
 }
 
 // Put creates a mock name for a put request.
-func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodPut, pattern, ms.router.Put, matchers...)
+func (ms *MockServer) Put(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodPut, pattern, matchers...)
 }
 
 // Patch creates a mock name for a patch request.
-func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodPatch, pattern, ms.router.Patch, matchers...)
+func (ms *MockServer) Patch(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodPatch, pattern, matchers...)
 }
 
 // Delete creates a mock name for a delete request.
-func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodDelete, pattern, ms.router.Delete, matchers...)
+func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodDelete, pattern, matchers...)
+}
+
+func (ms *MockServer) getEndpoint(method, path string) *Endpoint {
+    if e, found := ms.endpoints[endpointName(method, path)]; found {
+        return e
+    }
+
+    newE := newEndpoint(method, path)
+    ms.endpoints[newE.Name()] = newE
+
+    return newE
 }
 
 // Head creates a mock name for a head request.
-func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Endpoint {
-    return ms.registerEndpoint(http.MethodHead, pattern, ms.router.Head, matchers...)
+func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodHead, pattern, matchers...)
 }
 
 type routingFunc func(pattern string, h http.HandlerFunc)
 
-func (ms *MockServer) registerEndpoint(method string, pattern string, routing routingFunc, matchers ...Matcher) *Endpoint {
-    endpoint := newEndpoint(method, pattern)
-    ms.endpoints[endpoint.name] = endpoint
+func (ms *MockServer) registerEndpoint(method string, pattern string, matchers ...Matcher) *Scenario {
+    endpoint := ms.getEndpoint(method, pattern)
+    scenario := newScenario(matchers)
 
-    var counter int32 = 0
-    ms.requestCounting.Store(endpoint.name, &counter)
+    endpoint.AddScenario(scenario)
 
-    routing(pattern, func(w http.ResponseWriter, r *http.Request) {
-        atomic.AddInt32(&counter, 1)
-
-        for _, m := range matchers {
-            m(ms.T, r)
-        }
-
-        endpoint.writeTo(w)
-    })
-
-    return endpoint
+    return scenario
 }
 
 // Router exposes the internal chi.Router to allow configurations not supported by the helper methods.
@@ -203,8 +203,4 @@ func (ms *MockServer) Server() *httptest.Server {
 // Call this with a defer after starting the server.
 func (ms *MockServer) Teardown() {
     ms.server.Close()
-}
-
-func endpointName(m, p string) string {
-    return m + " " + p
 }

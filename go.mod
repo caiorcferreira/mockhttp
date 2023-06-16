@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/go-chi/chi/v5 v5.0.4
+	github.com/google/go-cmp v0.5.9
 	github.com/stretchr/testify v1.7.0
 )
 
