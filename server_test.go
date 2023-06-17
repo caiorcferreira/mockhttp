@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:gocognit // test function, complexity does not apply
 func TestMockServer(t *testing.T) {
 	t.Run("start mock server at specify port", func(t *testing.T) {
 		ms := NewMockServer(WithPort(60000))
@@ -65,6 +66,82 @@ func TestMockServer(t *testing.T) {
 		_, _ = http.Post("http://localhost:60000/foo", "", nil)
 
 		require.True(t, mockT.Failed())
+	})
+
+	t.Run("mock multiple responses to same endpoint", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Delete(
+			"/delete",
+			MatchQueryParams(url.Values{
+				"context": []string{"1"},
+			}),
+		).Respond(ResponseStatusCode(http.StatusForbidden))
+		ms.Delete(
+			"/delete",
+			MatchQueryParams(url.Values{
+				"context": []string{"2"},
+			}),
+		).Respond(ResponseStatusCode(http.StatusOK))
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		req1, err := http.NewRequest(http.MethodDelete, ms.URL()+"/delete?context=1", http.NoBody)
+		require.NoError(t, err)
+
+		first, err := http.DefaultClient.Do(req1)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusForbidden, first.StatusCode)
+
+		req2, err := http.NewRequest(http.MethodDelete, ms.URL()+"/delete?context=2", http.NoBody)
+		require.NoError(t, err)
+
+		second, err := http.DefaultClient.Do(req2)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, second.StatusCode)
+	})
+
+	t.Run("mock repeatable responses to same endpoint", func(t *testing.T) {
+		ms := NewMockServer(WithPort(60000))
+
+		ms.Delete(
+			"/delete",
+			MatchQueryParams(url.Values{
+				"context": []string{"1"},
+			}),
+		).Times(2).Respond(ResponseStatusCode(http.StatusForbidden))
+		ms.Delete(
+			"/delete",
+			MatchQueryParams(url.Values{
+				"context": []string{"2"},
+			}),
+		).Times(3).Respond(ResponseStatusCode(http.StatusOK))
+
+		ms.Start(t)
+		defer ms.Teardown()
+
+		for i := 0; i < 2; i++ {
+			req1, err := http.NewRequest(http.MethodDelete, ms.URL()+"/delete?context=1", http.NoBody)
+			require.NoError(t, err)
+
+			first, err := http.DefaultClient.Do(req1)
+			require.NoError(t, err)
+
+			require.Equalf(t, http.StatusForbidden, first.StatusCode, "request %d was wrong", i)
+		}
+
+		for i := 0; i < 3; i++ {
+			req2, err := http.NewRequest(http.MethodDelete, ms.URL()+"/delete?context=2", http.NoBody)
+			require.NoError(t, err)
+
+			second, err := http.DefaultClient.Do(req2)
+			require.NoError(t, err)
+
+			require.Equalf(t, http.StatusOK, second.StatusCode, "request %d was wrong", i)
+		}
 	})
 
 	t.Run("mock request with return builder", func(t *testing.T) {
@@ -250,11 +327,13 @@ func TestMockServer(t *testing.T) {
 
 		var response *http.Response
 		require.Eventually(t, func() bool {
-			r, err := http.DefaultClient.Do(request)
-			if err != nil {
+			r, doErr := http.DefaultClient.Do(request)
+			if doErr != nil {
 				return false
 			}
+
 			response = r
+
 			return true
 		}, 2*time.Second, 200*time.Millisecond)
 
@@ -281,8 +360,8 @@ func TestMockServer(t *testing.T) {
 
 		var response *http.Response
 		require.Eventually(t, func() bool {
-			r, err := http.DefaultClient.Do(request)
-			if err != nil {
+			r, doErr := http.DefaultClient.Do(request)
+			if doErr != nil {
 				return false
 			}
 			response = r
@@ -350,7 +429,7 @@ func TestMockServer(t *testing.T) {
 
 		ms := NewMockServer(WithPort(60000))
 
-		endpoint := ms.Get("/get").Respond(ResponseStatusCode(http.StatusNoContent))
+		scenario := ms.Get("/get").Respond(ResponseStatusCode(http.StatusNoContent))
 
 		ms.Start(mockT)
 		defer ms.Teardown()
@@ -367,7 +446,7 @@ func TestMockServer(t *testing.T) {
 
 		require.Equal(t, http.StatusNoContent, response.StatusCode)
 
-		require.Equal(t, 1, ms.TimesCalled(endpoint.name))
+		require.Equal(t, 1, scenario.TimesCalled())
 	})
 
 	t.Run("verifies number of times mocked name was called", func(t *testing.T) {
@@ -382,10 +461,10 @@ func TestMockServer(t *testing.T) {
 
 		getURL := ms.URL() + "/get"
 
-		r, err := http.Get(getURL)
+		_, err := http.Get(getURL)
 		require.NoError(t, err)
 
-		r, err = http.Get(getURL)
+		r, err := http.Get(getURL)
 		require.NoError(t, err)
 
 		require.Equal(t, http.StatusNoContent, r.StatusCode)

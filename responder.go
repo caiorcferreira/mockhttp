@@ -31,7 +31,7 @@ func ResponseHeaders(headers http.Header) Responder {
 func JSONResponseBody(jsonStr string) Responder {
 	return func(w http.ResponseWriter) {
 		w.Header().Add("Content-Type", "application/json")
-		w.Write([]byte(jsonStr))
+		w.Write([]byte(jsonStr)) //nolint:errcheck // test helper
 	}
 }
 
@@ -45,14 +45,15 @@ func JSONFileResponseBody(t *testing.T, filePath string) Responder {
 
 	return func(w http.ResponseWriter) {
 		w.Header().Add("Content-Type", "application/json")
-		w.Write(content)
+		w.Write(content) //nolint:errcheck // test helper
 	}
 }
 
 func StringResponseBody(b string) Responder {
 	return func(w http.ResponseWriter) {
-		w.Write([]byte(b))
+		w.Write([]byte(b)) //nolint:errcheck // test helper
 	}
 }
 
+//nolint:revive // noop
 func noop(w http.ResponseWriter) {}

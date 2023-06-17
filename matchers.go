@@ -6,8 +6,30 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
+
+type Matcher2 interface {
+	Match(r *http.Request) bool
+	Diff(r *http.Request) string
+}
+
+type queryParamMatcher struct {
+	expected url.Values
+}
+
+func (q queryParamMatcher) Match(r *http.Request) bool {
+	return cmp.Equal(q.expected, r.URL.Query())
+}
+
+func (q queryParamMatcher) Diff(r *http.Request) string {
+	return cmp.Diff(q.expected, r.URL.Query())
+}
+
+func MatchQueryParams2(qp url.Values) Matcher2 {
+	return queryParamMatcher{expected: qp}
+}
 
 type Matcher func(t *testing.T, r *http.Request)
 
