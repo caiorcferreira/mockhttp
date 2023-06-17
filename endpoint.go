@@ -6,9 +6,9 @@ import (
     "testing"
 )
 
+// Scenario is a mock case for a specific endpoint
 type Scenario struct {
     executionCount int64
-    endpoint       Endpoint
     times          int
     builders       []Responder
     matchers       []Matcher
@@ -21,11 +21,7 @@ func newScenario(matchers []Matcher) *Scenario {
     }
 }
 
-type Match struct {
-    Success  bool
-    Failures []string
-}
-
+// Match verifies if request matches expectations
 func (s *Scenario) Match(t *testing.T, r *http.Request) {
     t.Helper()
 
@@ -42,6 +38,7 @@ func (s *Scenario) Times(n int) *Scenario {
     return s
 }
 
+// TimesCalled return how many times this Scenario was executed
 func (s *Scenario) TimesCalled() int {
     return int(atomic.LoadInt64(&s.executionCount))
 }
@@ -50,11 +47,6 @@ func (s *Scenario) TimesCalled() int {
 func (s *Scenario) Respond(builders ...Responder) *Scenario {
     s.builders = builders
     return s
-}
-
-// Name returns the endpoint name (method + path) that this Returner represents.
-func (s *Scenario) Name() string {
-    return s.endpoint.Name()
 }
 
 func (s *Scenario) respondTo(w http.ResponseWriter) {
@@ -67,6 +59,8 @@ func (s *Scenario) respondTo(w http.ResponseWriter) {
     mw.flush(w)
 }
 
+// Endpoint defines an HTTP method and path that have
+// multiple mocked scenarios to produce responses.
 type Endpoint struct {
     method string
     path   string
@@ -79,6 +73,9 @@ func newEndpoint(method, path string) *Endpoint {
     return &Endpoint{method: method, path: path}
 }
 
+// Handler create an HTTP handler that executes each scenario in the order
+// they were defined. If a scenario defines a Times expectation, the scenario
+// is executed the number of times it's defined.
 func (e *Endpoint) Handler(t *testing.T) http.HandlerFunc {
     t.Helper()
 
@@ -112,12 +109,9 @@ func (e *Endpoint) Name() string {
     return endpointName(e.method, e.path)
 }
 
+// AddScenario appends a scenario to the endpoint
 func (e *Endpoint) AddScenario(s *Scenario) {
     e.scenarios = append(e.scenarios, s)
-}
-
-func (e *Endpoint) RequestCount() int64 {
-    return e.requestCount
 }
 
 // memoryResponseWriter accumulates all response builders

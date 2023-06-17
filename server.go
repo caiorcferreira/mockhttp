@@ -161,6 +161,11 @@ func (ms *MockServer) Delete(pattern string, matchers ...Matcher) *Scenario {
     return ms.registerEndpoint(http.MethodDelete, pattern, matchers...)
 }
 
+// Head creates a mock name for a head request.
+func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Scenario {
+    return ms.registerEndpoint(http.MethodHead, pattern, matchers...)
+}
+
 func (ms *MockServer) getEndpoint(method, path string) *Endpoint {
     if e, found := ms.endpoints[endpointName(method, path)]; found {
         return e
@@ -170,11 +175,6 @@ func (ms *MockServer) getEndpoint(method, path string) *Endpoint {
     ms.endpoints[newE.Name()] = newE
 
     return newE
-}
-
-// Head creates a mock name for a head request.
-func (ms *MockServer) Head(pattern string, matchers ...Matcher) *Scenario {
-    return ms.registerEndpoint(http.MethodHead, pattern, matchers...)
 }
 
 type routingFunc func(pattern string, h http.HandlerFunc)
