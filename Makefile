@@ -4,7 +4,7 @@ ifneq (,$(wildcard ./.env))
 endif
 
 # Library version
-VERSION ?= 1.0.0
+VERSION ?= 1.1.0
 
 # Image URL to use all building/pushing image targets
 IMG_NAME ?= boilerplate
