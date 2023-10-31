@@ -32,7 +32,11 @@ type MockServer struct {
 
 // NewMockServer creates a MockServer with the provided options.
 func NewMockServer(opts ...Option) *MockServer {
-	mockServer := &MockServer{endpoints: make(map[string]*Endpoint)}
+	mockServer := &MockServer{
+		endpoints: make(map[string]*Endpoint),
+		router: chi.NewRouter(),
+	}
+
 	for _, o := range opts {
 		o(mockServer)
 	}
@@ -55,16 +59,14 @@ func (ms *MockServer) Start(t *testing.T) {
 		return
 	}
 
-	router := chi.NewRouter()
-
 	routingFuncs := map[string]routingFunc{
-		http.MethodGet:     router.Get,
-		http.MethodPost:    router.Post,
-		http.MethodPut:     router.Put,
-		http.MethodPatch:   router.Patch,
-		http.MethodDelete:  router.Delete,
-		http.MethodHead:    router.Head,
-		http.MethodOptions: router.Options,
+		http.MethodGet:     ms.router.Get,
+		http.MethodPost:    ms.router.Post,
+		http.MethodPut:     ms.router.Put,
+		http.MethodPatch:   ms.router.Patch,
+		http.MethodDelete:  ms.router.Delete,
+		http.MethodHead:    ms.router.Head,
+		http.MethodOptions: ms.router.Options,
 	}
 
 	for _, endpoint := range ms.endpoints {
@@ -73,19 +75,18 @@ func (ms *MockServer) Start(t *testing.T) {
 		routing(endpoint.path, endpoint.Handler(t))
 	}
 
-	server := httptest.NewUnstartedServer(router)
+	server := httptest.NewUnstartedServer(ms.router)
 	server.Listener = l
 
-	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	ms.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 	})
-	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+	ms.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("no matching route found for %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
 
-	ms.router = router
 	ms.server = server
 	ms.T = t
 
