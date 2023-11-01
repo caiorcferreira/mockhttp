@@ -123,13 +123,13 @@ func (ms *MockServer) AssertExpectations() {
 	for _, endpoint := range ms.endpoints {
 		for _, scenario := range endpoint.scenarios {
 			if int(scenario.executionCount) == scenario.times {
-				break
+				continue
 			}
 
 			if scenario.executionCount == 0 {
 				ms.T.Errorf("endpoint %s was not called", endpoint.Name())
 
-				break
+				continue
 			}
 
 			ms.T.Errorf(
